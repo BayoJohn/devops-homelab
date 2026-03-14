@@ -1,0 +1,4 @@
+data/
+*.log
+.env
+cicd/harbor/common/config/

@@ -1,0 +1,41 @@
+# Pipeline version 2.0 - Forced Update
+kind: pipeline
+type: docker
+name: default
+
+clone:
+  disable: true
+
+steps:
+  - name: clone
+    image: alpine/git
+    commands:
+      - git clone http://172.17.0.1:3001/bayo/sample-app.git .
+      - git checkout $DRONE_COMMIT
+
+  - name: test
+    image: node:18-alpine
+    commands:
+      - npm install
+      - npm test
+
+  - name: final-push-test
+    image: plugins/docker
+    settings:
+      registry: 172.16.18.128
+      repo: 172.16.18.128/library/sample-app
+      username: admin
+      password:
+        from_secret: harbor_password
+      dockerfile: Dockerfile
+      insecure: true
+      tags: 
+        - latest
+        - build-${DRONE_BUILD_NUMBER}
+
+---
+kind: secret
+name: harbor_password
+get:
+  path: kv/data/harbor-creds
+  name: password

@@ -1,0 +1,36 @@
+services:
+  # The Database Engine
+  db:
+    image: postgres:15-alpine
+    container_name: finance-db
+    restart: always
+    environment:
+      POSTGRES_USER: financeuser
+      POSTGRES_PASSWORD: financepass
+      POSTGRES_DB: financedb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U financeuser -d financedb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # The Flask Web Application
+  web:
+    image: 172.16.18.128/library/finance-tracker:latest
+    container_name: finance-app
+    restart: always
+    ports:
+      - "5005:5000"
+    environment:
+      - DATABASE_URL=postgresql://financeuser:financepass@db:5432/financedb
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+      - ./instance:/app/instance
+
+volumes:
+  postgres_data:

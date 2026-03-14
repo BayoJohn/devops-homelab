@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  drone-server:
+    image: drone/drone:2
+    container_name: drone-server
+    restart: unless-stopped
+    hostname: drone-server
+    ports:
+      - "8080:80"
+    volumes:
+      - drone_data:/data
+    environment:
+      - DRONE_SERVER_HOST=localhost:8080
+      - DRONE_SERVER_PROTO=http
+      - DRONE_RPC_SECRET=1e91f507f4717eecef742ff801797dda
+      - DRONE_GITEA_SERVER=http://172.17.0.1:3001
+      - DRONE_GITEA_CLIENT_ID=06985c22-c2b6-4875-8a51-913180b3877e
+      - DRONE_GITEA_CLIENT_SECRET=gto_q4ugbrssjmqguiquatpoxqfuh63p6fg6f3s3d2u3zvwxokp6uihq
+      - DRONE_USER_CREATE=username:bayo,admin:true
+      - DRONE_DATABASE_DRIVER=sqlite3
+      - DRONE_DATABASE_DATASOURCE=/data/database.sqlite
+      - DRONE_LOGS_DEBUG=true
+      - DRONE_LOGS_PRETTY=true
+    networks:
+      - drone
+
+  drone-runner:
+    image: drone/drone-runner-docker:1
+    container_name: drone-runner
+    restart: unless-stopped
+    depends_on:
+      - drone-server
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DRONE_RPC_PROTO=http
+      - DRONE_RPC_HOST=drone-server  # ← Should be drone-server, not localhost!
+      - DRONE_RPC_SECRET=1e91f507f4717eecef742ff801797dda
+      - DRONE_RUNNER_CAPACITY=2
+      - DRONE_RUNNER_NAME=homelab-runner
+      - DRONE_DEBUG=true
+      - DRONE_TRACE=true
+    networks:
+      - drone
+
+volumes:
+  drone_data:
+
+networks:
+  drone:
+    driver: bridge
