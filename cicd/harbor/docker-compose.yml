@@ -271,34 +271,6 @@ services:
       options:
         syslog-address: "tcp://localhost:1514"
         tag: "exporter"
-  trivy-adapter:
-    image: goharbor/trivy-adapter-photon:v2.10.0
-    container_name: trivy-adapter
-    restart: always
-    cap_drop:
-      - ALL
-    cap_add:
-      - SETUID
-      - SETGID
-    networks:
-      - harbor
-    env_file:
-      - ./common/config/trivy-adapter/env
-    volumes:
-      - type: bind
-        source: ./common/config/shared/trust-certificates
-        target: /harbor_cust_cert
-      - /data/trivy-adapter/trivy:/home/scanner/.cache/trivy
-      - /data/trivy-adapter/reports:/home/scanner/.cache/reports
-    depends_on:
-      - log
-      - redis
-    logging:
-      driver: "syslog"
-      options:
-        syslog-address: "tcp://localhost:1514"
-        tag: "trivy-adapter"
-
 networks:
   harbor:
     external: false

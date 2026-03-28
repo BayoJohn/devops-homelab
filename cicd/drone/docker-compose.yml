@@ -41,6 +41,8 @@ services:
       - DRONE_RUNNER_NAME=homelab-runner
       - DRONE_DEBUG=true
       - DRONE_TRACE=true
+      - DRONE_RUNNER_VOLUMES=/var/run/docker.sock:/var/run/docker.sock
+      - DOCKER_CONFIG=/root/.docker
     networks:
       - drone
 
