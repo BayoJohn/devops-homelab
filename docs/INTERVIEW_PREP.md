@@ -28,34 +28,49 @@ This guide is designed to help you articulate the technical depth, architectural
 
 ## 3. 🛡️ Hero Stories: Problem-Solving (STAR Method)
 
-### Story 1: The Networking Connectivity Puzzle
-*   **Situation**: ArgoCD on Oracle Cloud couldn't pull manifests from the local Gitea server.
-*   **Task**: Establish a secure, stable communication channel between a public cloud and a home network behind NAT.
-*   **Action**: I configured a **WireGuard VPN** tunnel. I discovered that hardcoded Docker bridge IPs were unreliable, so I switched to using the WireGuard Peer individual IPs. I then automated the interface persistence using `systemd` to ensure connectivity survived node reboots.
-*   **Result**: 100% stable sync connectivity with zero public exposure of the Gitea server.
+### Story 1: The Networking & VPN Resilience (WireGuard)
+*   **Situation**: The connection between my local build server (Gitea/Drone) and the Oracle Cloud K3s cluster was unstable, frequently dropping after node reboots.
+*   **Root Cause**: I was manually assigning WireGuard IPs using `ip addr add`, which isn't persistent. Additionally, the VPN interface wouldn't always auto-start on boot.
+*   **Action**: 
+    1. I initially wrote a **Bash watchdog script** that would ping the peer and restart the interface if it went down. 
+    2. To move to a more 'production-grade' solution, I migrated the logic to a **native systemd service** using `wg-quick@wg0`. 
+    3. I configured `/etc/wireguard/wg0.conf` to handle persistence and enabled the service to start automatically on boot.
+*   **Result**: 100% VPN uptime, ensuring that ArgoCD always has access to the manifest repository.
 
-### Story 2: The "Chaos" Pull Failure
+### Story 2: Drone-Gitea Connectivity & IP Discovery
+*   **Situation**: Drone CI pipelines were hanging during the 'clone' step, unable to reach the Gitea container.
+*   **Root Cause**: The system was trying to use the Docker bridge IP (`172.17.0.1`), which was inconsistent across service restarts and isolated within the host.
+*   **Action**: I reconfigured the internal networking to use the **WireGuard peer IP (10.0.0.x)**. This provided a stable, routable static IP that worked regardless of Docker's internal bridge state.
+*   **Result**: Pipeline reliability jumped to 100%, enabling the sub-30s build-and-push workflow.
+
+### Story 3: The "Chaos" Pull Failure & Optimization
 *   **Situation**: During a chaos experiment (killing all portfolio pods), the new pods failed to start due to `ImagePullBackOff`.
-*   **Task**: Ensure the system can recover even when the network to the private registry is under high load.
-*   **Action**: I analyzed the failure and identified that `imagePullPolicy: Always` was flooding the VPN tunnel. I optimized this to `IfNotPresent` and tuned the registry timeouts.
-*   **Result**: Recovery time dropped to < 10 seconds, and the system now survives 100% of the chaos experiments I run.
+*   **Root Cause**: The `imagePullPolicy: Always` set in the manifests was forcing the cluster to pull from my local Harbor registry over the VPN tunnel for every pod. Under the load of a mass-restart, the tunnel bottlenecked.
+*   **Action**: I optimized the manifest to `imagePullPolicy: IfNotPresent`, leveraging the local node's cache for existing images.
+*   **Result**: Recovery time dropped to < 10 seconds, and the system now effortlessly heals even under mass-termination chaos events.
+
+### Story 4: Security & Git History Sanitization
+*   **Situation**: I accidentally committed a live Slack Webhook URL to a public repository, which was immediately flagged by GitHub's secret scanning.
+*   **Task**: Remove the secret and ensure it’s not retrievable through the Git history.
+*   **Action**: 
+    1. I immediately revoked the Slack token.
+    2. I used **git filter-repo** to scrub the secret from every commit in the history.
+    3. I implemented **Kubernetes Secrets** and environment variables to ensure secrets never touch the filesystem or repository again.
+*   **Result**: Successfully sanitized the repository, restored security, and implemented a more robust "Secrets-First" architecture.
+
+### Story 5: Resource Management & Port Conflicts (Node Exporter)
+*   **Situation**: After installing the Prometheus monitoring stack on K3s, the `node-exporter` pods went into a `CrashLoopBackOff`.
+*   **Root Cause**: A standalone `node-exporter` Docker container was already running on the host, occupying port 9100.
+*   **Action**: I performed a root-cause analysis using `kubectl logs` and `netstat`, identified the conflict, and decommissioned the legacy Docker container in favor of the K8s-managed DaemonSet.
+*   **Result**: Unified monitoring architecture and resolved the resource conflict.
 
 ---
 
 ## 4. 🚀 The Migration Journey: Docker to Kubernetes
 
-**Interviewer asks: "Why did you migrate, and how did you do it?"**
+**Interviewer asks: "Tell me about a difficult migration."**
 
-> "I realized that Docker Compose was great for local development but hit its limits for production-style management—specifically around **self-healing** and **horizontal scaling**. 
->
-> **The Steps I took:**
-> 1.  **Preparation**: Since my apps were already containerized, I could reuse my existing Docker images (the beauty of portability).
-> 2.  **Manifest Creation**: I translated my `docker-compose.yml` services into Kubernetes manifests: Deployments for the app logic, Services for internal networking, and Ingress (Traefik) for external access.
-> 3.  **Cluster Provisioning**: I set up a lightweight **K3s** cluster on an Oracle Cloud ARM instance to keep overhead low.
-> 4.  **State Management**: I migrated local file volumes to Kubernetes **Persistent Volumes (PVs)** to ensure my database state survived pod restarts.
-> 5.  **Deployment Switch**: I replaced my old 'SSH-to-host' deployment script with a **GitOps pipeline (ArgoCD)**.
->
-> **The Result**: I went from a system that needed manual restarts to one that scales automatically with traffic and self-heals in seconds."
+> "One of the biggest challenges was migrating the **stateful components** (PostgreSQL and application uploads) from Docker Volumes to Kubernetes **Persistent Volumes**. I had to ensure data integrity while switching from a host-path-based persistent model to a K8s-native one. I used the migration as an opportunity to implement **automated backups** and validated the entire move by running side-by-side environments before cutting over traffic via the Traefik Ingress."
 
 ---
 
