@@ -42,7 +42,24 @@ This guide is designed to help you articulate the technical depth, architectural
 
 ---
 
-## 4. 🧠 Deep-Dive: Auto-Recovery Webhook
+## 4. 🚀 The Migration Journey: Docker to Kubernetes
+
+**Interviewer asks: "Why did you migrate, and how did you do it?"**
+
+> "I realized that Docker Compose was great for local development but hit its limits for production-style management—specifically around **self-healing** and **horizontal scaling**. 
+>
+> **The Steps I took:**
+> 1.  **Preparation**: Since my apps were already containerized, I could reuse my existing Docker images (the beauty of portability).
+> 2.  **Manifest Creation**: I translated my `docker-compose.yml` services into Kubernetes manifests: Deployments for the app logic, Services for internal networking, and Ingress (Traefik) for external access.
+> 3.  **Cluster Provisioning**: I set up a lightweight **K3s** cluster on an Oracle Cloud ARM instance to keep overhead low.
+> 4.  **State Management**: I migrated local file volumes to Kubernetes **Persistent Volumes (PVs)** to ensure my database state survived pod restarts.
+> 5.  **Deployment Switch**: I replaced my old 'SSH-to-host' deployment script with a **GitOps pipeline (ArgoCD)**.
+>
+> **The Result**: I went from a system that needed manual restarts to one that scales automatically with traffic and self-heals in seconds."
+
+---
+
+## 5. 🧠 Deep-Dive: Auto-Recovery Webhook
 
 **Interviewer asks: "How do you handle automated failures?"**
 
@@ -50,7 +67,7 @@ This guide is designed to help you articulate the technical depth, architectural
 
 ---
 
-## 5. 📈 Key Stats to Flash
+## 6. 📈 Key Stats to Flash
 
 - **83% Speedup**: The GitOps transition reduced deployment time from 3 minutes to **30 seconds**.
 - **Efficiency**: Running **25+ pods** effectively on a single Oracle ARM instance through aggressive resource limit tuning.
@@ -58,7 +75,18 @@ This guide is designed to help you articulate the technical depth, architectural
 
 ---
 
-## ❓ Common Questions for You to Practice
+## 7. 🎨 The "Fun" Side: Passion for the Homelab
+
+**Interviewer asks: "What do you do for fun in your homelab?"** This is where you show your passion!
+
+- **Chaos Experiments**: "I actually enjoy 'breaking' my cluster on purpose with **Chaos Mesh**. There’s a certain satisfaction in watching the system detect a failure and automatically roll back or spin up new pods. It’s like a puzzle where I’m testing the resiliency of my own architecture."
+- **The "Hybrid Cloud" Feel**: "I love the magic of **WireGuard**. It’s incredibly cool to have my physical server in my room and a cloud instance in London feeling like they’re on the same local network. It allows me to build 'private-first' infrastructure where the cloud is just an extension of my home lab."
+- **Dashboard Zen**: "I spend a lot of time in **Grafana** building custom dashboards. Seeing the HPA (Horizontal Pod Autoscaler) kick in and the 'Replica Count' graph spike up when I run a load test is a huge rush—it’s seeing my automation work in real-time."
+- **Stack Ownership**: "There is a deep sense of independence in self-hosting **Gitea, Harbor, and Vault**. I’m not just using tools; I’m managing the entire lifecycle of the developer experience from scratch."
+
+---
+
+## 8. ❓ Common Questions for You to Practice
 
 1.  **"Why not just use GitHub Actions?"**
     *   *Answer*: "Gitea and Drone give me full control over my CI environment and keep my proprietary code/secrets entirely off the public internet, only exposing the final running app."
