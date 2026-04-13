@@ -2,3 +2,5 @@ data/
 *.log
 .env
 cicd/harbor/common/config/
+docs/INTERVIEW_PREP.md
+docs/INTERVIEW_STUDY_GUIDE.txt
