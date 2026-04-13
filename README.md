@@ -198,26 +198,26 @@ Developer commits code to Gitea
 Gitea webhook triggers Drone CI
         ↓
 Drone Runner executes build:
-  1. Clone & Test (npm/pytest)
+  1. Clone & Test (pytest)
   2. Build Docker image
   3. Push to Harbor Registry
         ↓
-Developer updates k8s manifests in Git
-        ↓ (Automatic or Manual)
-ArgoCD detects drift or New Commit
+Drone Step: Update K8s Manifest
+  (using update-manifest.sh with new Build Number)
         ↓
-GitOps Sync (Pull model):
-  1. ArgoCD pulls manifests from Gitea
+GitOps Sync (ArgoCD Pull):
+  1. ArgoCD detects manifest change in Gitea
   2. Reconciles state with K3s cluster
-  3. Automated rollout of new image
+  3. Rolling update to newest build
         ↓
 Monitoring & Alerting:
-Logs → Loki
-Metrics → Prometheus
-Alerts → Slack (via Alertmanager)
+Logs → Loki | Metrics → Prometheus | Alerts → Slack
 ```
 
-### Example Pipeline
+### ⚡ Performance Optimization
+The transition from standalone Docker Compose to Kubernetes + GitOps reduced our deployment pipeline time from **3 minutes** to a lightning-fast **30 seconds** (an 83% improvement).
+
+### Example Pipeline (.drone.yml)
 
 ```yaml
 kind: pipeline
@@ -228,30 +228,40 @@ clone:
   disable: true
 
 steps:
-  - name: clone
+  - name: clone-code
     image: alpine/git
     commands:
-      - git clone http://172.17.0.1:3001/bayo/sample-app.git .
-      - git checkout $DRONE_COMMIT
+      - git clone http://172.17.0.1:3001/Bayo/Porfolio-website.git .
+      - git checkout ${DRONE_COMMIT}
 
-  - name: test
-    image: node:18-alpine
+  - name: run-tests
+    image: python:3.13-slim
     commands:
-      - npm install
-      - npm test
+      - pip install -r requirements.txt --quiet
+      - pip install pytest pytest-flask --quiet
+      - pytest tests/ -v
 
   - name: build-and-push
     image: plugins/docker
     settings:
-      registry: 172.16.18.128:8888
-      repo: 172.16.18.128:8888/library/sample-app
+      registry: 10.0.0.2
+      repo: 10.0.0.2/library/portfolio
       tags:
         - latest
         - build-${DRONE_BUILD_NUMBER}
       username: admin
       password:
         from_secret: harbor_password
+      dockerfile: Dockerfile
       insecure: true
+
+  - name: update-k8s-manifest
+    image: alpine/git
+    environment:
+      GITEA_TOKEN:
+        from_secret: gitea_token
+    commands:
+      - sh update-manifest.sh ${DRONE_BUILD_NUMBER}
 ```
 
 ## 🔧 Key Problems Solved
@@ -278,7 +288,7 @@ During this project, I encountered and solved 17+ critical infrastructure proble
 | **Lines of YAML / Manifests**| 1200+ |
 | **Development Time** | ~72 hours total |
 | **Problems Solved** | 17/17 (100%) |
-| **Deployment Time** | < 3 minutes (GitOps) |
+| **Deployment Time** | **30 seconds** (GitOps) |
 | **Manual Steps** | 0 |
 
 ## 🔐 Security Features
