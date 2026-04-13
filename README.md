@@ -1,4 +1,4 @@
-# DevOps Homelab - Production Infrastructure
+# DevOps Homelab - Production Infrastructures
 
 > A complete, production-grade DevOps platform built from scratch with self-hosted CI/CD, monitoring, and cloud deployment.
 
