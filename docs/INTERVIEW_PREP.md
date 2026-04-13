@@ -26,91 +26,75 @@ This guide is designed to help you articulate the technical depth, architectural
 
 ---
 
-## 3. 🛡️ Hero Stories: Problem-Solving (STAR Method)
+## 3. 🧠 My Systematic Debugging Framework
+
+**Interviewer asks: "How do you approach a complex technical problem?"**
+
+1.  **Isolate the Layer**: "I determine if the failure is at the **Application**, **Container**, or **Network** layer. If a service is down, I first check the binary logs, then the container health, and finally the network port reachability."
+2.  **Deep-Dive Logs**: "I look beyond the 'Error' message for the stack trace. I use `docker logs` for container-level issues and `kubectl describe` or `journalctl` for infrastructure-level failures."
+3.  **Connectivity Validation**: "I use a 'Bottom-Up' approach: `ping` for basic reachability, `nc` or `telnet` for port validation, and `curl` for application response testing."
+4.  **Isolate & Iterate**: "I change one variable at a time (e.g., an environment variable or a firewall rule) and verify the result immediately. This prevents the 'fixing one thing but breaking another' trap."
+
+---
+
+## 4. 🛡️ Hero Stories: Problem-Solving (STAR Method)
 
 ### Story 1: The Networking & VPN Resilience (WireGuard)
 *   **Situation**: The connection between my local build server (Gitea/Drone) and the Oracle Cloud K3s cluster was unstable, frequently dropping after node reboots.
-*   **Root Cause**: I was manually assigning WireGuard IPs using `ip addr add`, which isn't persistent. Additionally, the VPN interface wouldn't always auto-start on boot.
-*   **Action**: 
-    1. I initially wrote a **Bash watchdog script** that would ping the peer and restart the interface if it went down. 
-    2. To move to a more 'production-grade' solution, I migrated the logic to a **native systemd service** using `wg-quick@wg0`. 
-    3. I configured `/etc/wireguard/wg0.conf` to handle persistence and enabled the service to start automatically on boot.
-*   **Result**: 100% VPN uptime, ensuring that ArgoCD always has access to the manifest repository.
+*   **Root Cause**: I was manually assigning WireGuard IPs, which wasn't persistent.
+*   **Action**: I initially wrote a **Bash watchdog script** to monitor and restart the interface, but later migrated to a **native systemd service** (`wg-quick@wg0`) for a production-grade solution.
+*   **Result**: 100% stable VPN tunnel and automated recovery on boot.
 
-### Story 2: Drone-Gitea Connectivity & IP Discovery
-*   **Situation**: Drone CI pipelines were hanging during the 'clone' step, unable to reach the Gitea container.
-*   **Root Cause**: The system was trying to use the Docker bridge IP (`172.17.0.1`), which was inconsistent across service restarts and isolated within the host.
-*   **Action**: I reconfigured the internal networking to use the **WireGuard peer IP (10.0.0.x)**. This provided a stable, routable static IP that worked regardless of Docker's internal bridge state.
-*   **Result**: Pipeline reliability jumped to 100%, enabling the sub-30s build-and-push workflow.
+### Story 2: Drone-Gitea Connectivity & The "Localhost" Trap
+*   **Situation**: My Drone CI runner couldn't reach Gitea, even though they were on the same host.
+*   **Root Cause**: I was using `localhost:3001`. In a container, `localhost` refers to the container itself, not the host machine.
+*   **Action**: I identified the **Docker bridge IP (172.17.0.1)** and updated my configurations.
+*   **Result**: Reliable cross-service communication and a deep understanding of container network namespaces.
 
-### Story 3: The "Chaos" Pull Failure & Optimization
-*   **Situation**: During a chaos experiment (killing all portfolio pods), the new pods failed to start due to `ImagePullBackOff`.
-*   **Root Cause**: The `imagePullPolicy: Always` set in the manifests was forcing the cluster to pull from my local Harbor registry over the VPN tunnel for every pod. Under the load of a mass-restart, the tunnel bottlenecked.
-*   **Action**: I optimized the manifest to `imagePullPolicy: IfNotPresent`, leveraging the local node's cache for existing images.
-*   **Result**: Recovery time dropped to < 10 seconds, and the system now effortlessly heals even under mass-termination chaos events.
+### Story 3: Resource Management & Port Conflicts
+*   **Situation**: After installing the Prometheus monitoring stack, the `node-exporter` pods went into a `CrashLoopBackOff`.
+*   **Root Cause**: A standalone `node-exporter` Docker container was already running on the same port (9100).
+*   **Action**: I used `netstat -tulpn` to identify the conflict and decommissioned the legacy container in favor of the K8s DaemonSet.
+*   **Result**: Unified monitoring and resolved resource contention.
 
 ### Story 4: Security & Git History Sanitization
-*   **Situation**: I accidentally committed a live Slack Webhook URL to a public repository, which was immediately flagged by GitHub's secret scanning.
-*   **Task**: Remove the secret and ensure it’s not retrievable through the Git history.
-*   **Action**: 
-    1. I immediately revoked the Slack token.
-    2. I used **git filter-repo** to scrub the secret from every commit in the history.
-    3. I implemented **Kubernetes Secrets** and environment variables to ensure secrets never touch the filesystem or repository again.
-*   **Result**: Successfully sanitized the repository, restored security, and implemented a more robust "Secrets-First" architecture.
-
-### Story 5: Resource Management & Port Conflicts (Node Exporter)
-*   **Situation**: After installing the Prometheus monitoring stack on K3s, the `node-exporter` pods went into a `CrashLoopBackOff`.
-*   **Root Cause**: A standalone `node-exporter` Docker container was already running on the host, occupying port 9100.
-*   **Action**: I performed a root-cause analysis using `kubectl logs` and `netstat`, identified the conflict, and decommissioned the legacy Docker container in favor of the K8s-managed DaemonSet.
-*   **Result**: Unified monitoring architecture and resolved the resource conflict.
+*   **Situation**: I accidental committed a live Slack Webhook URL to a public repository.
+*   **Action**: I revoked the token, used `git filter-repo` to scrub the secret from the entire commit history, and migrated all secrets to **Kubernetes Secrets**.
+*   **Result**: Restored security and implemented a "Secrets-First" architecture.
 
 ---
 
-## 4. 🚀 The Migration Journey: Docker to Kubernetes
+## 5. 🚀 The Migration Journey: Docker to Kubernetes
 
 **Interviewer asks: "Tell me about a difficult migration."**
 
-> "One of the biggest challenges was migrating the **stateful components** (PostgreSQL and application uploads) from Docker Volumes to Kubernetes **Persistent Volumes**. I had to ensure data integrity while switching from a host-path-based persistent model to a K8s-native one. I used the migration as an opportunity to implement **automated backups** and validated the entire move by running side-by-side environments before cutting over traffic via the Traefik Ingress."
+> "One of the biggest challenges was migrating **stateful components** like PostgreSQL from Docker Volumes to Kubernetes **Persistent Volumes**. I had to ensure data integrity during the move. I validated the entire transition by running side-by-side environments before cutting over traffic via the **Traefik Ingress**. This move improved my platform's resilience and enabled automated horizontal scaling (HPA) that wasn't possible with Docker Compose."
 
 ---
 
-## 5. 🧠 Deep-Dive: Auto-Recovery Webhook
+## 6. 🦾 Advanced Reliability: Auto-Recovery & Chaos
 
-**Interviewer asks: "How do you handle automated failures?"**
+**Interviewer asks: "How do you ensure 99.9% availability?"**
 
-> "I built a custom Python microservice that acts as a 'last line of defense.' It listens for Prometheus alerts. When it detects a `KubePodCrashLooping` alert in the portfolio namespace, it doesn't just notify Slack—it actually queries the ArgoCD API, identifies the last successful deployment ID, and triggers an automated rollback. This closed-loop automation ensures that a bad image push doesn't stay in production, even if I'm not at my computer."
-
----
-
-## 6. 📈 Key Stats to Flash
-
-- **83% Speedup**: The GitOps transition reduced deployment time from 3 minutes to **30 seconds**.
-- **Efficiency**: Running **25+ pods** effectively on a single Oracle ARM instance through aggressive resource limit tuning.
-- **Problem Solving**: Documented and resolved **17+ critical infrastructure bugs**, proving a methodical troubleshooting approach.
+- **Chaos Engineering**: "I use **Chaos Mesh** to inject 'Pod Kill' experiments. It validates that my Kubernetes self-healing and HPA logic actually work under fire before a real outage happens."
+- **Auto-Recovery Webhook**: "I built a custom Python microservice that listens for `KubePodCrashLooping` alerts. It automatically queries the ArgoCD API and triggers a rollback to the last successful deployment ID, ensuring the system recovers even if I'm not online."
 
 ---
 
-## 7. 🎨 The "Fun" Side: Passion for the Homelab
+## 7. 📈 Key Stats to Flash
 
-**Interviewer asks: "What do you do for fun in your homelab?"** This is where you show your passion!
-
-- **Chaos Experiments**: "I actually enjoy 'breaking' my cluster on purpose with **Chaos Mesh**. There’s a certain satisfaction in watching the system detect a failure and automatically roll back or spin up new pods. It’s like a puzzle where I’m testing the resiliency of my own architecture."
-- **The "Hybrid Cloud" Feel**: "I love the magic of **WireGuard**. It’s incredibly cool to have my physical server in my room and a cloud instance in London feeling like they’re on the same local network. It allows me to build 'private-first' infrastructure where the cloud is just an extension of my home lab."
-- **Dashboard Zen**: "I spend a lot of time in **Grafana** building custom dashboards. Seeing the HPA (Horizontal Pod Autoscaler) kick in and the 'Replica Count' graph spike up when I run a load test is a huge rush—it’s seeing my automation work in real-time."
-- **Stack Ownership**: "There is a deep sense of independence in self-hosting **Gitea, Harbor, and Vault**. I’m not just using tools; I’m managing the entire lifecycle of the developer experience from scratch."
+- **83% Speedup**: Deployment time reduced from 3 minutes to **30 seconds**.
+- **Efficiency**: Running **25+ pods** on a single ARM instance via aggressive resource tuning.
+- **Stability**: Resolved **17+ critical infrastructure bugs**, all documented in a systematic [Troubleshooting Guide](file:///home/bayo/homelab/TROUBLESHOOTING.md).
 
 ---
 
-## 8. ❓ Common Questions for You to Practice
+## 8. 🎨 The "Passion" Side: Why I do it
 
-1.  **"Why not just use GitHub Actions?"**
-    *   *Answer*: "Gitea and Drone give me full control over my CI environment and keep my proprietary code/secrets entirely off the public internet, only exposing the final running app."
-2.  **"How do you handle secrets?"**
-    *   *Answer*: "I use HashiCorp Vault for build secrets and Kubernetes Secrets for runtime. I also implemented git history scrubbing to ensure no secrets ever leak into the repository commits."
-3.  **"What happens if the WireGuard VPN goes down?"**
-    *   *Answer*: "The apps remain running on K3s, but syncs fail. That's why I implemented systemd monitoring for the `wg-quick` service to ensure it auto-restarts immediately."
+- **"The Hybrid Cloud Experience"**: Using WireGuard to make my home desk and a London cloud instance feel like one private LAN is incredibly rewarding.
+- **"Zen-Like Dashboarding"**: I find building custom **Grafana** dashboards to visualize the "pulse" of a cluster to be one of the most satisfying parts of DevOps.
 
 ---
 
 > [!TIP]
-> **Confidence Pro-Tip**: When talking about the project, use "we" for industry standards (e.g., "In DevOps, we use GitOps...") but use "I" for your specific contributions (e.g., "I implemented the rollback logic..."). It shows you understand both the industry context and your own technical impact.
+> **Pro-Tip**: When you talk about the **Troubleshooting Guide**, mention that you treat documentation as part of the "Definition of Done." This shows you are a mature engineer who cares about the team's long-term success.
